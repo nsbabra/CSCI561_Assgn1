@@ -13,14 +13,16 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.Queue;
+import java.util.Stack;
 import java.util.StringTokenizer;
-import java.util.concurrent.LinkedBlockingDeque;
 
 /**
  *
@@ -33,10 +35,10 @@ public class waterFlow {
     private static Node mStartNode ;
     private static HashMap<String, Node> mDestinationNodes;
     private static HashMap<String, Node> mMiddleNodes;
-    private static int mNumPipes;
     private static int mStartTime;
     
-    
+    private static final String NEWLINE = System.getProperty("line.separator");
+
     private static Test[] tests;
 
     public static void main(String[] args) throws FileNotFoundException {
@@ -78,28 +80,31 @@ public class waterFlow {
             }
         
         }catch(IOException | NumberFormatException ex){
+        	try{
+        		reader.close();
+        	}catch(Exception e){	
+        	}
             System.out.println("Exception in Parsing File : "+ex);
         }
-
         
-        try{
-            FileWriter filewriter = new FileWriter("output.txt");
+        try (FileWriter filewriter = new FileWriter("output.txt")) {
             for (Test currentTest : tests) {
                 switch(currentTest.type){
                     case "BFS":
-                        BFSGraphBuilder(currentTest);
+                        BFSDFSGraphBuilder(currentTest);
                         BFS(filewriter);
                         break;
-//                    case "DFS":
-//                        new DFS(currentTest,filewriter);
-//                    case "UCS":
-//                        new UCS(currentTest, filewriter);
+                    case "DFS":
+                        BFSDFSGraphBuilder(currentTest);
+                        DFS(filewriter);
+    //                    case "UCS":
+    //                        new UCS(currentTest, filewriter);
                 }
             }
-            filewriter.close();
-        }catch(Exception ex){
-            System.out.println("Exception in writing to file : "+ex);
+        } catch (IOException ex) {
+            Logger.getLogger(waterFlow.class.getName()).log(Level.SEVERE, null, ex);
         }
+       
         
         
         
@@ -108,11 +113,10 @@ public class waterFlow {
     }
     
     
-    private static void BFSGraphBuilder(Test currentTest){
+    private static void BFSDFSGraphBuilder(Test currentTest){
         mGraph = new HashMap<>();
         mStartNode = new Node(currentTest.startNode);
         mStartTime = currentTest.startTime;
-        mNumPipes =  currentTest.numPipes; 
         
         mGraph.put(mStartNode.label, mStartNode);
         
@@ -125,18 +129,20 @@ public class waterFlow {
             mGraph.put(currentToken, destNode);
         }
         
-        mMiddleNodes = new HashMap<>();
+//        mMiddleNodes = new HashMap<>();
         StringTokenizer tokenizerMiddle = new StringTokenizer(currentTest.middleNodes);
         while(tokenizerMiddle.hasMoreTokens()){
             String currentToken = tokenizerMiddle.nextToken();
+            
             Node middleNode = new Node(currentToken);
-            mMiddleNodes.put(currentToken, middleNode);
+            
+//            mMiddleNodes.put(currentToken, middleNode);
             mGraph.put(currentToken, middleNode);
         }
         
-        
+        StringTokenizer tokenizer = null;
         for (String graphLine : currentTest.graph) {
-            StringTokenizer tokenizer = new StringTokenizer(graphLine);
+            tokenizer = new StringTokenizer(graphLine);
             Node node = mGraph.get(tokenizer.nextToken());
             node.adjList.add(mGraph.get(tokenizer.nextToken()));
         }
@@ -145,10 +151,10 @@ public class waterFlow {
     
     private static void BFS(FileWriter fileWriter){
          
-         Queue fifoQueue = new LinkedList();
+         Queue<Node> fifoQueue = new LinkedList<>();
          fifoQueue.add(mStartNode);
          
-         Queue exploredQueue = new LinkedList();
+         Queue<Node> exploredQueue = new LinkedList<>();
          
          
          while(true){
@@ -161,6 +167,9 @@ public class waterFlow {
              currentNode.state = 1;
              exploredQueue.add(currentNode);
              
+             Comparator<Node> nodeComparator = (Node o1, Node o2) -> o1.toString().compareTo(o2.toString());
+             
+             Collections.sort(currentNode.adjList, nodeComparator );
              for(Node node: currentNode.adjList){
                  if(node.state==0 && !fifoQueue.contains(node)){
                      if(mDestinationNodes.containsKey(node.label)){
@@ -168,13 +177,14 @@ public class waterFlow {
                          //TODO : Remove inner path loop, only for debugging
                          System.out.println("Path is : ");
                          int i = 0;
-                         for(i=0; i < exploredQueue.size(); i++){
-                            System.out.print(((Node)exploredQueue.remove()).toString()+" ");
+                         while(!exploredQueue.isEmpty()){
+                        	 i++;
+                            System.out.print((exploredQueue.remove()).toString());
                          }
                          System.out.println(mDestinationNodes.get(node.label));
                          try{
                             fileWriter.append((mDestinationNodes.get(node.label)).toString());
-                            fileWriter.append(" "+(mStartTime+i));
+                            fileWriter.append(" "+(mStartTime+i)+NEWLINE);
                          }
                          catch(IOException ex){
                              System.out.println("Exception in writing to File : "+ex);
@@ -189,19 +199,56 @@ public class waterFlow {
         //Labha hi nahi.. So nothing to write ?
     }
     
-    
-    private static class DFS {
-        public DFS(Test currentTest, FileWriter filewriter) {
+    private static void DFS(FileWriter fileWriter){
+         Stack<Node> lifoStack = new Stack<>();
+         lifoStack.push(mStartNode);
+         Queue<Node> exploredQueue = new LinkedList<>();     
+         while(true){
+             if(lifoStack.isEmpty()){
+                 System.out.println("Stack Empty in DFS");
+                 break;
+             }
+             
+             Node currentNode = lifoStack.pop();
+             currentNode.state = 1;
+             exploredQueue.add(currentNode);
+             
+             Comparator<Node> nodeComparator = (Node o1, Node o2) -> o1.toString().compareTo(o2.toString());
+             
+             Collections.sort(currentNode.adjList, nodeComparator);
+             
+             for(Node node: currentNode.adjList){
+                 if(node.state==0 && !lifoStack.contains(node)){
+                     if(mDestinationNodes.containsKey(node.label)){
+                          //FileWrite and RETURN;
+                         //TODO : Remove inner path loop, only for debugging
+                         System.out.println("Path is : ");
+                         int i = 0;
+                         while(!exploredQueue.isEmpty()){
+                        	 i++;
+                            System.out.print((exploredQueue.remove()).toString());
+                         }
+                         System.out.println(mDestinationNodes.get(node.label));
+                         try{
+                            fileWriter.append((mDestinationNodes.get(node.label)).toString());
+                            fileWriter.append(" "+(mStartTime+i)+NEWLINE);
+                         }
+                         catch(IOException ex){
+                             System.out.println("Exception in writing to File : "+ex);
+                         }
+                         System.out.println("Cost is : "+(mStartTime+i));
+                         return;
+                     }
+                     else{
+                        lifoStack.push(node);
+                     }
+                 }
+             }
         }
-    }
-
-    private static class UCS {
-        public UCS(Test currentTest, FileWriter filewriter) {
-        }
+        //Labha hi nahi.. So nothing to write ?
     }
     
-    
-    
+       
     private static class Node{
         String label;
         List<Node> adjList;
@@ -218,14 +265,12 @@ public class waterFlow {
             return label;
         }
     }
-    
-    
-     private static class Test{
+      
+    private static class Test{
         String type;
         String startNode;
         String destinationNodes;
         String middleNodes;
-        int numPipes;
         String[] graph;
         int startTime;
 
@@ -235,12 +280,9 @@ public class waterFlow {
             this.startNode = startNode;
             this.destinationNodes = destinationNodes;
             this.middleNodes = middleNodes;
-            this.numPipes = numPipes;
             this.graph = graph;
             this.startTime = startTime;
         }
-        
-        
     }
     
 
